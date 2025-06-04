@@ -1,19 +1,17 @@
-﻿namespace MyHOADrop.Models
+﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
+
+namespace MyHOADrop.Models
 {
     public class UploadViewModel
     {
-        public IFormFile File { get; set; }
+        [Required]
+        [Display(Name = "File")]
+        public IFormFile File { get; set; } = default!;
+
+        [Required]
+        [Range(1, int.MaxValue, ErrorMessage = "Folder ID must be greater than zero.")]
         public int FolderId { get; set; }
     }
-
-    public class FileRecord
-    {
-        public int Id { get; set; }
-        public string Filename { get; set; }
-        public string UploaderId { get; set; }
-        public DateTime UploadedOn { get; set; }
-        public long Size { get; set; }
-        public int FolderId { get; set; }
-    }
-
 }
+

@@ -1,30 +1,28 @@
 ﻿using FluentValidation;
+using MyHOADrop.Models;
+using Microsoft.AspNetCore.Http;
 
 namespace MyHOADrop.Validators
 {
-    public class UploadViewModelValidator : AbstractValidator<Models.UploadViewModel>
+    public class UploadViewModelValidator : AbstractValidator<UploadViewModel>
     {
         public UploadViewModelValidator()
         {
-            // 1. File must not be null
+            // 1) Ensure File is not null when you’re actually uploading.
             RuleFor(x => x.File)
-                .NotNull().WithMessage("Please select a file.")
-                .Must(f => f.Length > 0).WithMessage("File is empty.")
-                .Must(f =>
-                {
-                    // Limit to 10 MB
-                    return f.Length <= 10 * 1024 * 1024;
-                }).WithMessage("File size must be 10 MB or less.")
-                .Must(f =>
-                {
-                    // Only allow certain extensions
-                    var ext = Path.GetExtension(f.FileName).ToLowerInvariant();
-                    return ext == ".pdf" || ext == ".docx" || ext == ".jpg";
-                }).WithMessage("Only .pdf, .docx, or .jpg files are allowed.");
+                .NotNull()
+                .WithMessage("Please select a file.");
 
-            // 2. FolderId must be positive
+            // 2) If File is non-null, check its length (this guard prevents NRE).
+            RuleFor(x => x.File.Length)
+                .Must(len => len > 0)
+                .WithMessage("The selected file is empty.")
+                .When(x => x.File != null);
+
+            // 3) FolderId must be greater than zero (or whatever business rule you have).
             RuleFor(x => x.FolderId)
-                .GreaterThan(0).WithMessage("Invalid folder selected.");
+                .GreaterThan(0)
+                .WithMessage("Folder ID must be greater than zero.");
         }
     }
 }

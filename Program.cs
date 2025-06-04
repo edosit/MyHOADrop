@@ -1,48 +1,58 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using FluentValidation;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using FluentValidation.AspNetCore;
 using MyHOADrop.Data;
 using MyHOADrop.Models;
 using MyHOADrop.Validators;
+using MyHOADrop.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+// 1) Configure EF Core and Database Context
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
+// 2) Configure Identity (Individual Accounts)
+builder.Services.AddDefaultIdentity<IdentityUser>(options =>
+    {
+        options.SignIn.RequireConfirmedAccount = false;
+    })
     .AddEntityFrameworkStores<ApplicationDbContext>();
-builder.Services.AddControllersWithViews();
 
-// 1. Register controllers + FluentValidation
+// 3) Configure MVC + FluentValidation
 builder.Services
     .AddControllersWithViews()
     .AddFluentValidation(fv =>
     {
-        // Automatically discover any IValidator<T> in the assembly
-        fv.RegisterValidatorsFromAssemblyContaining<Program>();
-        // Optionally: disable the default DataAnnotations integration if you don’t need it
+        fv.RegisterValidatorsFromAssemblyContaining<UploadViewModelValidator>();
         fv.DisableDataAnnotationsValidation = true;
     });
 
-// 2. (Optional) If you want to inject the validator manually:
-builder.Services.AddTransient<IValidator<UploadViewModel>, UploadViewModelValidator>();
+// 4) Add Razor Pages (required for Identity UI)
+builder.Services.AddRazorPages();
+
+// 5) Register custom services
+builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// 6) Configure middleware pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseMigrationsEndPoint();
+    app.UseDeveloperExceptionPage();
+    app.UseMigrationsEndPoint(); // shows EF migration errors, etc.
 }
 else
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
@@ -51,11 +61,13 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseAuthentication();   // <ï¿½ make sure Authentication comes before Authorization
 app.UseAuthorization();
 
+// 7) Configure endpoints
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
-app.MapRazorPages();
+app.MapRazorPages();        // <ï¿½ maps Identityï¿½s Razor Pages and any other *.cshtml pages
 
 app.Run();

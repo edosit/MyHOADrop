@@ -54,16 +54,16 @@ namespace MyHOADrop.Controllers
 
         // DELETE: api/files/5
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+        public async Task<IActionResult> OnPostDeleteAsync(int id)
         {
-            var file = await _db.FileRecords.FindAsync(id);
-            if (file == null) return NotFound();
-
-            await _storage.DeleteFileAsync(file.Filename, file.FolderId);
-            _db.FileRecords.Remove(file);
-            await _db.SaveChangesAsync();
-
-            return NoContent();
+            var record = _db.FileRecords.Find(id);
+            if (record != null)
+            {
+                _storage.DeleteFile(record);
+                _db.FileRecords.Remove(record);
+                await _db.SaveChangesAsync();
+            }
+            return RedirectToPage("FilesIndex");
         }
     }
 }

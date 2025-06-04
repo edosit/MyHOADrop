@@ -8,71 +8,91 @@ using System.Threading.Tasks;
 
 namespace MyHOADrop.Services
 {
-    public class Services
-    {
-    }
 
     public interface IFileStorageService
     {
-        Task SaveFileAsync(IFormFile file, int folderId);
-        Task DeleteFileAsync(string filename, int folderId);
+        /// <summary>
+        /// Saves the uploaded file into wwwroot/Uploads/{folderId} and returns a populated FileRecord.
+        /// </summary>
+        Task<FileRecord> SaveFileAsync(IFormFile file, int folderId);
+
+        /// <summary>
+        /// Deletes the physical file from disk based on the FileRecord.
+        /// </summary>
+        void DeleteFile(FileRecord record);
     }
 
-        public class LocalFileStorageService : IFileStorageService
+    public class LocalFileStorageService : IFileStorageService
     {
         private readonly IWebHostEnvironment _env;
-        private readonly ApplicationDbContext _db;
 
-        public LocalFileStorageService(
-            IWebHostEnvironment env,
-            ApplicationDbContext db)
+        public LocalFileStorageService(IWebHostEnvironment env)
         {
             _env = env;
-            _db = db;
         }
 
-        public async Task SaveFileAsync(IFormFile file, int folderId)
+        public async Task<FileRecord> SaveFileAsync(IFormFile file, int folderId)
         {
-            // 1) Ensure the folder exists on disk: wwwroot/Uploads/{folderId}
-            var uploadsFolder = Path.Combine(_env.WebRootPath, "Uploads", folderId.ToString());
-            if (!Directory.Exists(uploadsFolder))
-                Directory.CreateDirectory(uploadsFolder);
+            if (file == null || file.Length == 0)
+            {
+                throw new InvalidOperationException("No file provided or file is empty.");
+            }
 
-            // 2) Generate a unique filename
-            var uniqueName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
-            var filePath = Path.Combine(uploadsFolder, uniqueName);
+            // 1. Sanitize the incoming filename
+            var untrustedFileName = Path.GetFileName(file.FileName);
 
-            // 3) Save the file to disk
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            // 2. Whitelist file extensions (adjust as needed)
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".pdf", ".docx", ".xlsx", ".txt" };
+            var ext = Path.GetExtension(untrustedFileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(ext))
+            {
+                throw new InvalidOperationException($"Files of type '{ext}' are not allowed.");
+            }
+
+            // 3. Generate a safe, unique filename
+            var safeFileName = $"{Guid.NewGuid():N}_{untrustedFileName}";
+
+            // 4. Build the target folder path under wwwroot/Uploads/{folderId}
+            var uploadsFolderPath = Path.Combine(_env.WebRootPath, "Uploads", folderId.ToString());
+            if (!Directory.Exists(uploadsFolderPath))
+            {
+                Directory.CreateDirectory(uploadsFolderPath);
+            }
+
+            // 5. Build the full file path
+            var fullFilePath = Path.Combine(uploadsFolderPath, safeFileName);
+
+            // 6. Copy the contents
+            using (var stream = new FileStream(fullFilePath, FileMode.Create))
             {
                 await file.CopyToAsync(stream);
             }
 
-            // 4) Record metadata in the database
+            // 7. Create and return the FileRecord
             var record = new FileRecord
             {
-                Filename = uniqueName,
+                Filename   = safeFileName,
                 UploadedOn = DateTime.UtcNow,
-                Size = file.Length,
-                UploaderId = null
-                /* fetch from HttpContext.User.Identity.Name or similar */,
-                FolderId = folderId
+                Size       = file.Length,
+                FolderId   = folderId,
+                UploaderId = string.Empty // Caller will set this
             };
-            _db.FileRecords.Add(record);
-            await _db.SaveChangesAsync();
+
+            return record;
         }
 
-        public async Task DeleteFileAsync(string filename, int folderId)
+        public void DeleteFile(FileRecord record)
         {
-            var uploadsFolder = Path.Combine(_env.WebRootPath, "Uploads", folderId.ToString());
-            var filePath = Path.Combine(uploadsFolder, filename);
+            if (record == null)
+                return;
+
+            // Build the path: wwwroot/Uploads/{FolderId}/{Filename}
+            var filePath = Path.Combine(_env.WebRootPath, "Uploads", record.FolderId.ToString(), record.Filename);
 
             if (File.Exists(filePath))
+            {
                 File.Delete(filePath);
-
-            // Deleting the database record itself happens in the controller,
-            // so this method just removes the physical file.
-            await Task.CompletedTask;
+            }
         }
     }
 }

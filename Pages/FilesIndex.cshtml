@@ -1,0 +1,321 @@
+﻿@page
+@model MyHOADrop.Pages.FilesIndexModel
+@{
+    ViewData["Title"] = "File Manager";
+}
+
+<!-- *********************************************** -->
+<!-- 1) Toast Container (shown after a successful upload) -->
+<!-- *********************************************** -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+    <div id="uploadToast"
+         class="toast align-items-center text-white bg-success border-0"
+         role="alert"
+         aria-live="assertive"
+         aria-atomic="true"
+         data-bs-delay="3000">
+        <div class="d-flex">
+            <div class="toast-body">
+                @TempData["ToastMessage"]
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+
+<!-- *********************************************** -->
+<!-- 2) Folder‐Filter Form -->
+<!-- *********************************************** -->
+<form method="get" class="row g-2 mb-4 align-items-center">
+    <div class="col-auto">
+        <label for="folderSelect" class="form-label">Select Folder:</label>
+        <select id="folderSelect"
+                name="folder"
+                asp-for="FolderFilter"
+                class="form-select"
+                onchange="this.form.submit()">
+            <option value="">-- All Folders --</option>
+            @{
+                // Build the distinct list of folder IDs from the current FilesList
+                var distinctFolders = Model.FilesList
+                .Select(f => f.FolderId)
+                .Distinct()
+                .OrderBy(f => f)
+                .ToList();
+            }
+            @foreach (var fld in distinctFolders)
+            {
+                <option value="@fld"
+                        selected="@(Model.FolderFilter == fld ? "selected" : "")">
+                    Folder @fld
+                </option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">
+            <i class="bi bi-filter"></i> Go
+        </button>
+    </div>
+</form>
+
+<!-- *********************************************** -->
+<!-- 3) Upload Card -->
+<!-- *********************************************** -->
+<div class="card shadow-sm mb-5">
+    <div class="card-header bg-primary text-white py-2">
+        <h5 class="mb-0 fs-6">Upload a File</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" asp-page-handler="Upload" enctype="multipart/form-data" class="row g-3">
+            @* Antiforgery token (auto‐injected by TagHelper) *@
+
+            <!-- File Input -->
+            <div class="col-12 col-md-6">
+                <label asp-for="UploadInput.File" class="form-label">Select File</label>
+                <input asp-for="UploadInput.File" type="file" class="form-control" />
+                <span asp-validation-for="UploadInput.File" class="text-danger small"></span>
+            </div>
+
+            <!-- Only show FolderId input if no folder is currently filtered -->
+            @if (!Model.FolderFilter.HasValue)
+            {
+                <div class="col-12 col-md-3">
+                    <label asp-for="UploadInput.FolderId" class="form-label">Folder ID</label>
+                    <input asp-for="UploadInput.FolderId" type="number" class="form-control" value="1" />
+                    <div class="form-text">Numeric folder ID (e.g. 1).</div>
+                    <span asp-validation-for="UploadInput.FolderId" class="text-danger small"></span>
+                </div>
+            }
+
+            <!-- Upload Button -->
+            <div class="col-12 col-md-3 d-grid">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-upload me-2"></i> Upload
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- *********************************************** -->
+<!-- 4) Existing Files Card -->
+<!-- *********************************************** -->
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white py-2">
+        <h5 class="mb-0 fs-6">Existing Files</h5>
+    </div>
+    <div>
+        @if (Model.FilesList == null || !Model.FilesList.Any())
+        {
+            <!-- Empty-State: centered icon + message -->
+            <div class="card-body bg-light d-flex flex-column justify-content-center align-items-center" style="min-height: 150px;">
+                <i class="bi bi-folder2-open display-4 text-secondary mb-3"></i>
+                <p class="h5 text-secondary mb-0">No files have been uploaded yet</p>
+                <p class="text-muted small">Use the “Upload a File” form above to add your first file.</p>
+            </div>
+        }
+        else
+        {
+            <!-- Table of existing files -->
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th scope="col">Filename</th>
+                                <th scope="col">Uploader</th>
+                                <th scope="col">Uploaded On</th>
+                                <th scope="col" class="d-none d-md-table-cell">Size</th>
+                                <th scope="col" class="d-none d-md-table-cell">Folder ID</th>
+                                <th scope="col" class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var file in Model.FilesList)
+                            {
+                                <tr>
+                                    <!-- Filename: truncated with tooltip -->
+                                    <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                                        data-bs-toggle="tooltip"
+                                        title="@file.Filename">
+                                        @file.Filename
+                                    </td>
+
+                                    <!-- Uploader -->
+                                    <td>
+                                        @(
+                                                                        string.IsNullOrEmpty(file.UploaderId)
+                                                                        ? "<em>Anonymous</em>"
+                                                                        : file.UploaderId
+                                                                        )
+                                </td>
+
+                                    <!-- UploadedOn -->
+                                    <td>@file.UploadedOn.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</td>
+
+                                    <!-- Size and Folder ID (hidden on small screens) -->
+                                    <td class="d-none d-md-table-cell">@file.Size.ToString("N0") bytes</td>
+                                    <td class="d-none d-md-table-cell">@file.FolderId</td>
+
+                                    <!-- Actions: Download + Delete -->
+                                    <td class="text-center">
+                                        <!-- Download Button -->
+                                        <a class="btn btn-sm btn-primary me-1"
+                                           href="~/Uploads/@file.FolderId/@file.Filename"
+                                           download="@file.Filename"
+                                           role="button"
+                                           title="Download @file.Filename">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                        <!-- Delete Button (opens confirmation modal) -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-danger"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#confirmDeleteModal"
+                                                data-file-id="@file.Id"
+                                                data-file-name="@file.Filename"
+                                                aria-label="Delete file @file.Filename">
+                                            <i class="bi bi-trash-fill" aria-hidden="true"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                                }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- *********************************************** -->
+<!-- 5) Delete Confirmation Modal -->
+<!-- *********************************************** -->
+<div class="modal fade"
+     id="confirmDeleteModal"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false"
+     tabindex="-1"
+     aria-labelledby="confirmDeleteModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmDeleteModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> Confirm Delete
+                </h5>
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <form method="post" asp-page-handler="Delete" id="deleteForm">
+                @* Antiforgery token auto-injected *@
+                <div class="modal-body">
+                    <p>
+                        Are you sure you want to delete
+                        <code class="text-break" id="modalFileName">this file</code>?
+                    </p>
+                    <input type="hidden" name="id" id="modalFileId" value="" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash-fill me-1"></i> Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- *********************************************** -->
+<!-- 6) Help Modal -->
+<!-- *********************************************** -->
+<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="helpModalLabel">
+                    <i class="bi bi-question-circle me-2"></i> File Manager Help
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    <strong>Uploading:</strong>
+                    Use the “Upload a File” form above. If you have already selected a folder in the dropdown,
+                    the file will automatically go into that folder. Otherwise, type a numeric Folder ID (e.g. “1”).
+                </p>
+                <p>
+                    <strong>Filtering by Folder:</strong><br />
+                    Use the dropdown at the top to choose “Folder 1,” “Folder 2,” etc. Click “Go” or simply change
+                    the dropdown and it will reload. To show all folders, pick “-- All Folders --.”
+                </p>
+                <p>
+                    <strong>Existing Files Table:</strong><br />
+                    - The blue <i class="bi bi-download"></i> button downloads the file.
+                    - The red <i class="bi bi-trash-fill"></i> button opens a confirmation modal before deleting.
+                    - The “Uploader” column shows who uploaded the file (or “Anonymous”).
+                    - The “Folder ID” column shows which folder this file belongs to.
+                </p>
+                <p>
+                    <strong>Security & Limits:</strong><br />
+                    - Only certain file types are allowed (.jpg, .png, .pdf, .docx, etc.).
+                    - Each upload is limited to 50 MB.
+                    - Filenames are sanitized and prefixed with a GUID to avoid collisions.
+                    - You must be logged in to see your User ID as the Uploader; otherwise, files appear as “Anonymous.”
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof bootstrap !== 'undefined') {
+                // 1) Initialize all Bootstrap tooltips (for truncated filenames)
+                var tooltipTriggers = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+                tooltipTriggers.forEach(function(el) {
+                    new bootstrap.Tooltip(el);
+                });
+
+                // 2) Show the success toast if it exists and has text
+                var toastEl = document.getElementById('uploadToast');
+                if (toastEl && toastEl.innerText.trim().length > 0) {
+                    var toast = new bootstrap.Toast(toastEl);
+                    toast.show();
+                }
+
+                // 3) Wire up the Delete Confirmation Modal
+                var confirmDeleteModal = document.getElementById('confirmDeleteModal');
+                if (confirmDeleteModal) {
+                    confirmDeleteModal.addEventListener('show.bs.modal', function(event) {
+                        var button   = event.relatedTarget;
+                        var fileId   = button.getAttribute('data-file-id');
+                        var fileName = button.getAttribute('data-file-name');
+
+                        var modalFileNameElem = confirmDeleteModal.querySelector('#modalFileName');
+                        var modalFileIdElem   = confirmDeleteModal.querySelector('#modalFileId');
+
+                        if (modalFileNameElem) {
+                            modalFileNameElem.textContent = fileName;
+                        }
+                        if (modalFileIdElem) {
+                            modalFileIdElem.value = fileId;
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+}

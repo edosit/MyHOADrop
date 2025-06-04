@@ -1,8 +1,15 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Home";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="container mt-4">
+    <h1 class="display-4">Welcome to MyHOADrop</h1>
+    <p class="lead">
+        This is your main page. Click the button below to manage files.
+    </p>
+
+    <!-- Plain href to the Razor Page at /FilesIndex -->
+    <a href="~/FilesIndex" class="btn btn-primary btn-lg">
+        <i class="bi bi-upload me-2"></i> Go to File Upload
+    </a>
 </div>
